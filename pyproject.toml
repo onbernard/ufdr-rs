@@ -1,0 +1,35 @@
+[project]
+name = "ufdr"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Onésime BERNARD", email = "bernard.onesime@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = []
+
+[project.scripts]
+ufdr = "ufdr:main"
+
+[tool.maturin]
+module-name = "ufdr._core"
+python-packages = ["ufdr"]
+python-source = "src"
+
+[tool.uv]
+cache-keys = [{file = "pyproject.toml"}, {file = "rust/Cargo.toml"}, {file = "**/*.rs"}]
+
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[dependency-groups]
+dev = [
+    "debugpy>=1.8.14",
+    "ipykernel>=6.29.5",
+    "ipywidgets>=8.1.7",
+    "pyright>=1.1.400",
+    "ruff>=0.11.10",
+    "tqdm>=4.67.1",
+]
