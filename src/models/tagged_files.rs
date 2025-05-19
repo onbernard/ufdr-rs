@@ -1,6 +1,7 @@
-use std::io::BufRead;
+use std::{io::BufRead};
 use quick_xml::{events::{BytesStart, Event}, Reader};
 use crate::utils::attributes_to_map;
+use crate::models::Metadata;
 
 
 
@@ -33,16 +34,17 @@ impl TaggedFiles {
 #[derive(Debug)]
 #[allow(dead_code)]
 pub struct File {
-    fs: String,
-    fsid: String,
-    path: String,
-    size: u64,
-    id: String,
-    extraction_id: u64,
-    deleted: String,
-    embedded: String,
-    is_related: String,
-    access_info: Option<AccessInfo>,
+    pub fs: String,
+    pub fsid: String,
+    pub path: String,
+    pub size: u64,
+    pub id: String,
+    pub extraction_id: u64,
+    pub deleted: String,
+    pub embedded: String,
+    pub is_related: String,
+    pub access_info: Option<AccessInfo>,
+    pub metadata: Vec<Metadata>
 }
 
 impl File {
@@ -52,9 +54,16 @@ impl File {
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let mut buf = Vec::new();
         let mut access_info: Option<AccessInfo> = None;
+        let mut metadata: Vec<Metadata> = Vec::new();
         loop {
             match reader.read_event_into(&mut buf)? {
-
+                Event::Start(e) if e.name().as_ref() == b"accessInfo" => {
+                    access_info = Some(AccessInfo::parse_one(reader)?);
+                }
+                Event::Start(e) if e.name().as_ref() == b"metadata" => {
+                    metadata.push(Metadata::parse_one(&e, reader)?);
+                }
+                Event::End(e) if e.name().as_ref() == b"file" => break,
                 Event::Eof => break,
                 _ => {}
             }
@@ -70,7 +79,8 @@ impl File {
             deleted: map.get("deleted").cloned().ok_or("missing deleted")?,
             embedded: map.get("embedded").cloned().ok_or("missing embedded")?,
             is_related: map.get("isrelated").cloned().ok_or("missing isrelated")?,
-            access_info: access_info,
+            access_info,
+            metadata
         })
     }
 }
@@ -82,9 +92,53 @@ pub struct AccessInfo {
     timestamps: Vec<Timestamp>
 }
 
+impl AccessInfo {
+    pub fn parse_one<B: BufRead>(
+        reader: &mut Reader<B>
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        let mut buf = Vec::new();
+        let mut timestamps: Vec<Timestamp> = Vec::new();
+        loop {
+            match reader.read_event_into(&mut buf)? {
+                Event::Start(e) if e.name().as_ref() == b"timestamp" => {
+                    timestamps.push(Timestamp::parse_one(&e, reader)?);
+                }
+                Event::End(e) if e.name().as_ref() == b"accessInfo" => break,
+                Event::Eof => break,
+                _ => {}
+            }
+        }
+        Ok(AccessInfo { timestamps })
+    }
+}
+
+
 #[derive(Debug)]
 #[allow(dead_code)]
 pub struct Timestamp {
     name: String,
     text: String,
+}
+
+impl Timestamp {
+    pub fn parse_one<B: BufRead>(e: &BytesStart, reader: &mut Reader<B>) -> Result<Self, Box<dyn std::error::Error>> {
+        let map = attributes_to_map(e)?;
+        let mut text = String::new();
+        let mut buf = Vec::new();
+        loop {
+            match reader.read_event_into(&mut buf)? {
+                Event::Text(e) => {
+                    text.push_str(&e.unescape()?.to_string());
+                }
+                Event::End(e) if e.name().as_ref() == b"timestamp" => break,
+                Event::Eof => return Err("unexpected EOF inside <timestamp>".into()),
+                _ => {}
+            }
+            buf.clear();
+        }
+        Ok(Timestamp {
+            name: map.get("name").cloned().ok_or("missing name")?,
+            text,
+        })
+    }
 }

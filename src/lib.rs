@@ -1,16 +1,16 @@
 use pyo3::{prelude::*,exceptions::PyIOError};
-use quick_xml::{events::{Event}, Reader};
+use quick_xml::{de, events::Event, Reader};
 use std::{fs::File, io::BufReader, str};
 
 
 pub mod utils;
 pub mod models;
 
-use models::{SourceExtractions, CaseInformation, Metadata, Images, TaggedFiles};
+use models::{SourceExtractions, CaseInformation, Metadata, Images, TaggedFiles, DecodedData};
 
 
 #[pyfunction]
-fn xml(path: &str) -> PyResult<()> {
+fn xml(path: &str) -> PyResult<Option<DecodedData>> {
     let file = File::open(path).map_err(|e| PyIOError::new_err(e.to_string()))?;
     let mut reader = Reader::from_reader(BufReader::new(file));
     let mut buf = Vec::new();
@@ -43,7 +43,13 @@ fn xml(path: &str) -> PyResult<()> {
 
             Event::Start(ref e) if e.name().as_ref() == b"taggedFiles" => {
                 let tagged_files = TaggedFiles::parse_one(&mut reader).map_err(|e| PyIOError::new_err(e.to_string()))?;
-                println!("{:#?}", tagged_files);
+                // println!("{:#?}", tagged_files);
+            }
+
+            Event::Start(ref e) if e.name().as_ref() == b"decodedData" => {
+                let decoded_data = DecodedData::parse_one(&mut reader).map_err(|e| PyIOError::new_err(e.to_string()))?;
+                return Ok(Some(decoded_data));
+                // println!("{:#?}", decoded_data);
             }
 
             Event::Eof => break,
@@ -54,7 +60,7 @@ fn xml(path: &str) -> PyResult<()> {
         buf.clear();
     }
 
-    Ok(())
+    Ok(None)
 }
 
 
