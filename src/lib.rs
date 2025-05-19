@@ -1,5 +1,5 @@
 use pyo3::{prelude::*,exceptions::PyIOError};
-use quick_xml::{de, events::Event, Reader};
+use quick_xml::{events::Event, Reader};
 use std::{fs::File, io::BufReader, str};
 
 
@@ -23,7 +23,7 @@ fn xml(path: &str) -> PyResult<Option<DecodedData>> {
         match event {
             Event::Start(ref e) if e.name().as_ref() == b"sourceExtractions" => {
                 let source_extractions = SourceExtractions::parse_one(&mut reader).map_err(|e| PyIOError::new_err(e.to_string()))?;
-                // println!("{:#?}", source_extractions);
+                println!("{:#?}", source_extractions);
             }
 
             Event::Start(ref e) if e.name().as_ref() == b"caseInformation" => {
@@ -48,7 +48,7 @@ fn xml(path: &str) -> PyResult<Option<DecodedData>> {
 
             Event::Start(ref e) if e.name().as_ref() == b"decodedData" => {
                 let decoded_data = DecodedData::parse_one(&mut reader).map_err(|e| PyIOError::new_err(e.to_string()))?;
-                return Ok(Some(decoded_data));
+                // return Ok(Some(decoded_data));
                 // println!("{:#?}", decoded_data);
             }
 
