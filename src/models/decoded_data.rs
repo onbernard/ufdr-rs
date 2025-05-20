@@ -3,9 +3,10 @@ use std::{io::BufRead};
 use pyo3::pyclass;
 use quick_xml::{events::{BytesStart, Event}, Reader};
 use crate::utils::attributes_to_map;
+use crate::models::{DataField, Field};
 
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 #[pyclass]
 pub struct DecodedData {
     pub model_types: Vec<ModelType>
@@ -49,7 +50,7 @@ impl DecodedData {
 }
 
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct ModelType {
     pub dtype: String,
     pub models: Vec<Model>,
@@ -95,7 +96,7 @@ impl ModelType {
 }
 
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Model {
     pub dtype: String,
     pub id: String,
@@ -177,7 +178,7 @@ impl Model {
 }
 
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct ModelField {
     pub name: String,
     pub dtype: String,
@@ -224,89 +225,9 @@ impl ModelField {
 }
 
 
-#[derive(Debug)]
-pub struct Field {
-    pub name: String,
-    pub dtype: String,
-    pub value: Option<Value>,
-}
-
-impl Field {
-    pub fn parse_one<B: BufRead>(e: &BytesStart, reader: &mut Reader<B>) -> Result<Self, Box<dyn std::error::Error>> {
-        let map = attributes_to_map(e)?;
-        let mut buf = Vec::new();
-        let mut value = None;
-        loop {
-            match reader.read_event_into(&mut buf)? {
-                Event::Start(e) if e.name().as_ref() == b"value" => {
-                    value = Some(Value::parse_one(&e, reader)?);
-                }
-                Event::Empty(e) if e.name().as_ref() == b"empty" => {}
-                Event::End(e) if e.name().as_ref() == b"field" => break,
-                Event::Eof => panic!("unexpected eof when parsing field"),
-                Event::Text(e) => {
-                    if e.unescape()?.trim().is_empty() {
-                    } else {
-                        panic!(
-                            "unexpected text when parsing field at position {}: {:?}",
-                            reader.buffer_position(),
-                            e
-                        )
-                    }
-                }
-                unexpected => panic!(
-                    "unexpected event when parsing field {} at position {}: {:?}",
-                    map.get("name").unwrap(),
-                    reader.buffer_position(),
-                    unexpected
-                )
-            }
-            buf.clear();
-        }
-        Ok(Field {
-            name: map.get("name").cloned().ok_or("missing name")?,
-            dtype: map.get("type").cloned().ok_or("missing type")?,
-            value,
-        })
-    }
-}
 
 
-#[derive(Debug)]
-pub struct Value {
-    pub dtype: String,
-    pub text: String,
-}
-
-impl Value {
-    pub fn parse_one<B: BufRead>(e: &BytesStart, reader: &mut Reader<B>) -> Result<Self, Box<dyn std::error::Error>> {
-        let map = attributes_to_map(e)?;
-        let mut text = String::new();
-        let mut buf = Vec::new();
-        loop {
-            match reader.read_event_into(&mut buf)? {
-                Event::Text(e) => {
-                    text.push_str(&e.unescape()?.to_string());
-                }
-                Event::CData(e) => {
-                    text.push_str(std::str::from_utf8(&e)?.trim());
-                }
-                Event::End(e) if e.name().as_ref() == b"value" => break,
-                Event::Eof => panic!("unexpected eof when parsing value"),
-                _ => panic!("unexpected event when parsing value")
-            }
-            buf.clear();
-        }
-        Ok(Value {
-            dtype: map.get("type").cloned().ok_or("missing type")?,
-            text,
-        })
-    }
-}
-
-
-
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct MultiModelField {
     pub name: String,
     pub dtype: String,
@@ -354,66 +275,8 @@ impl MultiModelField {
 }
 
 
-#[derive(Debug)]
-pub struct DataField {
-    pub name: String,
-    pub dtype: String,
-    pub sources: Vec<Source>
-}
 
-impl DataField {
-    pub fn parse_one<B: BufRead>(e: &BytesStart, reader: &mut Reader<B>) -> Result<Self, Box<dyn std::error::Error>> {
-        let map = attributes_to_map(e)?;
-        let mut buf = Vec::new();
-        let mut sources = Vec::new();
-        loop {
-            match reader.read_event_into(&mut buf)? {
-                Event::Empty(e) if e.name().as_ref() == b"source" => {
-                    sources.push(Source::parse_one(&e)?);
-                }
-                Event::End(e) if e.name().as_ref() == b"dataField" => break,
-                Event::Eof => panic!("unexpected eof when parsing dataField"),
-                Event::Text(e) => {
-                    if e.unescape()?.trim().is_empty() {
-                    } else {
-                        panic!(
-                            "unexpected text when parsing dataField at position {}: {:?}",
-                            reader.buffer_position(),
-                            e
-                        )
-                    }
-                }
-                unexpected => panic!(
-                    "unexpected event when parsing dataField at position {}: {:?}",
-                    reader.buffer_position(),
-                    unexpected
-                )
-            }
-            buf.clear();
-        }
-        Ok(DataField {
-            name: map.get("name").cloned().ok_or("missing name")?,
-            dtype: map.get("type").cloned().ok_or("missing type")?,
-            sources,
-        })
-    }
-}
-
-
-#[derive(Debug)]
-pub struct Source {
-    pub length: u64,
-}
-
-impl Source {
-    pub fn parse_one(e: &BytesStart) -> Result<Self, Box<dyn std::error::Error>> {
-        let map = attributes_to_map(e)?;
-        Ok(Source { length: map.get("length").cloned().ok_or("missing length")?.parse()? })
-    }
-}
-
-
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct MultiField {
     pub name: String,
     pub dtype: String,

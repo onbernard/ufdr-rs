@@ -1,14 +1,13 @@
 use std::{io::BufRead};
 use quick_xml::{events::{BytesStart, Event}, Reader};
 use crate::utils::attributes_to_map;
-use crate::models::Metadata;
+use crate::models::{Metadata, AccessInfo};
 
 
 
 #[derive(Debug)]
-#[allow(dead_code)]
 pub struct TaggedFiles {
-    files: Vec<File>
+    pub files: Vec<File>
 }
 
 impl TaggedFiles {
@@ -32,7 +31,6 @@ impl TaggedFiles {
 }
 
 #[derive(Debug)]
-#[allow(dead_code)]
 pub struct File {
     pub fs: String,
     pub fsid: String,
@@ -86,59 +84,4 @@ impl File {
 }
 
 
-#[derive(Debug)]
-#[allow(dead_code)]
-pub struct AccessInfo {
-    timestamps: Vec<Timestamp>
-}
 
-impl AccessInfo {
-    pub fn parse_one<B: BufRead>(
-        reader: &mut Reader<B>
-    ) -> Result<Self, Box<dyn std::error::Error>> {
-        let mut buf = Vec::new();
-        let mut timestamps: Vec<Timestamp> = Vec::new();
-        loop {
-            match reader.read_event_into(&mut buf)? {
-                Event::Start(e) if e.name().as_ref() == b"timestamp" => {
-                    timestamps.push(Timestamp::parse_one(&e, reader)?);
-                }
-                Event::End(e) if e.name().as_ref() == b"accessInfo" => break,
-                Event::Eof => break,
-                _ => {}
-            }
-        }
-        Ok(AccessInfo { timestamps })
-    }
-}
-
-
-#[derive(Debug)]
-#[allow(dead_code)]
-pub struct Timestamp {
-    name: String,
-    text: String,
-}
-
-impl Timestamp {
-    pub fn parse_one<B: BufRead>(e: &BytesStart, reader: &mut Reader<B>) -> Result<Self, Box<dyn std::error::Error>> {
-        let map = attributes_to_map(e)?;
-        let mut text = String::new();
-        let mut buf = Vec::new();
-        loop {
-            match reader.read_event_into(&mut buf)? {
-                Event::Text(e) => {
-                    text.push_str(&e.unescape()?.to_string());
-                }
-                Event::End(e) if e.name().as_ref() == b"timestamp" => break,
-                Event::Eof => return Err("unexpected EOF inside <timestamp>".into()),
-                _ => {}
-            }
-            buf.clear();
-        }
-        Ok(Timestamp {
-            name: map.get("name").cloned().ok_or("missing name")?,
-            text,
-        })
-    }
-}
