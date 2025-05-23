@@ -1,17 +1,4 @@
-# Python-generated files
-__pycache__/
-*.py[oc]
-build/
-dist/
-wheels/
-*.egg-info
-*.so
-
-# Virtual environments
-.venv
+/target
 .direnv/
 .envrc
-
-target/
-tests-local/
-test_data/
+data/

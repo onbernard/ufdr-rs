@@ -1,19 +1,10 @@
 use std::{io::BufRead};
-
 use quick_xml::{events::{BytesStart, Event}, Reader};
-use crate::utils::attributes_to_map;
+use super::{attributes_to_map, ParseError};
 
 
 
-#[derive(Debug)]
-struct ParseError {
-    message: String,
-}
-
-
-
-#[derive(Debug)]
-#[allow(dead_code)]
+#[derive(Debug, PartialEq)]
 pub struct SourceExtractions {
     pub infos: Vec<ExtractionInfo>
 }
@@ -31,23 +22,25 @@ impl SourceExtractions {
                 }
                 Event::End(e) if e.name().as_ref() == b"sourceExtractions" => break,
                 Event::Eof => {
-                    return Err(Box::new(ParseError::new("unexpected EOF when parsing decodedData")));
+                    return Err(Box::new(ParseError::new("unexpected EOF when parsing sourceExtractions")));
                 },
                 Event::Text(e) => {
                     if e.unescape()?.trim().is_empty() {
                     } else {
-                        panic!(
-                            "unexpected text when parsing decodedData at position {}: {:?}",
+                        return Err(Box::new(ParseError::new(&format!(
+                            "unexpected text when parsing sourceExtractions at position {}: {:?}",
                             reader.buffer_position(),
                             e
-                        )
+                        ))));
                     }
                 }
-                unexpected => panic!(
-                    "unexpected event when parsing decodedData at position {}: {:?}",
-                    reader.buffer_position(),
-                    unexpected
-                )
+                unexpected => {
+                    return Err(Box::new(ParseError::new(&format!(
+                        "unexpected event when parsing sourceExtractions at position {}: {:?}",
+                        reader.buffer_position(),
+                        unexpected
+                    ))));
+                }
             }
             buf.clear();
         }
@@ -56,13 +49,12 @@ impl SourceExtractions {
 }
 
 
-#[derive(Debug)]
-#[allow(dead_code)]
+#[derive(Debug, PartialEq)]
 pub struct ExtractionInfo {
     pub id: u32,
     pub name: String,
     pub is_custom_name: String,
-    pub dtype: String, // `type` is a Rust keyword
+    pub dtype: String,
     pub device_name: String,
     pub full_name: String,
     pub index: u32,
@@ -82,5 +74,86 @@ impl ExtractionInfo {
             index: map.get("index").ok_or("missing index")?.parse()?,
             is_partial_data: map.get("IsPartialData").cloned().ok_or("missing IsPartialData")?,
         })
+    }
+}
+
+
+#[cfg(test)]
+mod test {
+    use std::io::Cursor;
+    use super::*;
+
+    #[test]
+    fn test_extraction_info() -> Result<(), String> {
+        let xml_str = r#"
+            <extractionInfo id="0" name="Logical" isCustomName="False" type="Logical" deviceName="Report" fullName="Cellebrite UFED Reports" index="0" IsPartialData="False" />
+        "#;
+        let mut reader = Reader::from_reader(Cursor::new(xml_str));
+        let mut buf = Vec::new();
+        loop {
+            match reader.read_event_into(&mut buf) {
+                Ok(Event::Empty(e)) if e.name().as_ref() == b"extractionInfo" => {
+                    if let Ok(extraction_info) = ExtractionInfo::parse_one(&e) {
+                        assert_eq!(extraction_info, ExtractionInfo {
+                            id: 0,
+                            name: "Logical".to_string(),
+                            is_custom_name: "False".to_string(),
+                            dtype: "Logical".to_string(),
+                            device_name: "Report".to_string(),
+                            full_name: "Cellebrite UFED Reports".to_string(),
+                            index: 0,
+                            is_partial_data: "False".to_string(),
+                        });
+                        return Ok(());
+                    } else {
+                        return Err("ExtractionInfo::parse_one error".to_string());
+                    }
+                },
+                Ok(Event::Eof) => {
+                    return Err("eof".to_string());
+                }
+                _ => (),
+            }
+            buf.clear();
+        }
+    }
+
+    #[test]
+    fn test_source_extractions() -> Result<(), String> {
+        let xml_str = r#"
+        <sourceExtractions>
+            <extractionInfo id="0" name="Logical" isCustomName="False" type="Logical" deviceName="Report" fullName="Cellebrite UFED Reports" index="0" IsPartialData="False" />
+        </sourceExtractions>
+        "#;
+                let mut reader = Reader::from_reader(Cursor::new(xml_str));
+        let mut buf = Vec::new();
+        loop {
+            match reader.read_event_into(&mut buf) {
+                Ok(Event::Start(e)) if e.name().as_ref() == b"sourceExtractions" => {
+                    if let Ok(source_extraction) = SourceExtractions::parse_one(&mut reader) {
+                        assert_eq!(source_extraction, SourceExtractions {
+                            infos: vec![ExtractionInfo {
+                                id: 0,
+                                name: "Logical".to_string(),
+                                is_custom_name: "False".to_string(),
+                                dtype: "Logical".to_string(),
+                                device_name: "Report".to_string(),
+                                full_name: "Cellebrite UFED Reports".to_string(),
+                                index: 0,
+                                is_partial_data: "False".to_string(),
+                            }]
+                        });
+                        return Ok(());
+                    } else {
+                        return Err("sourceExtractions::parse_one error".to_string());
+                    }
+                },
+                Ok(Event::Eof) => {
+                    return Err("eof".to_string());
+                }
+                _ => (),
+            }
+            buf.clear();
+        }
     }
 }
