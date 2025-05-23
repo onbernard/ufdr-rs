@@ -7,7 +7,9 @@ authors = [
     { name = "Onésime BERNARD", email = "bernard.onesime@gmail.com" }
 ]
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "lxml>=5.4.0",
+]
 
 [project.scripts]
 ufdr = "ufdr:main"
